@@ -30,5 +30,10 @@ auto/configure --with-cc=cl --builddir=objs --prefix= --conf-path=conf/nginx.con
 
 完毕！
 
+-----
+
+下载已编译的 ngnix1.20.2 for win x64:
+https://github.com/chnykn/nginx-upload-module/releases
+
 
 
