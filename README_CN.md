@@ -11,7 +11,8 @@
 
 Windows平台编译，请首先参考官方帮助：http://nginx.org/en/docs/howto_build_on_win32.html
 
-###注意事项如下：
+### 注意事项如下：
+
 1、nginx源码请在https://github.com/nginx/nginx 下载，**不要**在Nginx官方网站下载，因为其中auto目录内缺少configure文件，无法编译；
 
 2、perl的版本建议不要低于5.30，并且在path路径建议放在前面，确保能找到正确的perl.exe；因为git、msys2等内置perl.exe，但无法用ngnix编译；
