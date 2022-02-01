@@ -10,38 +10,37 @@
 
 #if nginx_version >= 1011002
 
-#include <ngx_md5.h>
+    #include <ngx_md5.h>
 
-typedef ngx_md5_t MD5_CTX;
+    typedef ngx_md5_t MD5_CTX;
 
-#define MD5Init ngx_md5_init
-#define MD5Update ngx_md5_update
-#define MD5Final ngx_md5_final
+    #define MD5Init ngx_md5_init
+    #define MD5Update ngx_md5_update
+    #define MD5Final ngx_md5_final
 
-#define MD5_DIGEST_LENGTH 16
+    #define MD5_DIGEST_LENGTH 16
 
-#include <openssl/sha.h>
+    #include <openssl/sha.h>
 
 #else
 
-#if (NGX_HAVE_OPENSSL_MD5_H)
-#include <openssl/md5.h>
-#else
-#include <md5.h>
-#endif
+    #if (NGX_HAVE_OPENSSL_MD5_H)
+        #include <openssl/md5.h>
+    #else
+        #include <md5.h>
+    #endif
 
-#if (NGX_OPENSSL_MD5)
-#define  MD5Init    MD5_Init
-#define  MD5Update  MD5_Update
-#define  MD5Final   MD5_Final
-#endif
+    #if (NGX_OPENSSL_MD5)
+        #define  MD5Init    MD5_Init
+        #define  MD5Update  MD5_Update
+        #define  MD5Final   MD5_Final
+    #endif
 
-#if (NGX_HAVE_OPENSSL_SHA1_H)
-#include <openssl/sha.h>
-#else
-#include <sha.h>
-#endif
-
+    #if (NGX_HAVE_OPENSSL_SHA1_H)
+        #include <openssl/sha.h>
+    #else
+        #include <sha.h>
+    #endif
 
 #endif
 
@@ -55,8 +54,8 @@ typedef ngx_md5_t MD5_CTX;
 #define X_SESSION_ID_STRING                     "X-Session-ID:"
 #define FORM_DATA_STRING                        "form-data"
 #define ATTACHMENT_STRING                       "attachment"
-#define FILENAME_STRING                         "filename="
-#define FIELDNAME_STRING                        "name="
+#define FILENAME_STRING                         "filename=\""
+#define FIELDNAME_STRING                        "name=\""
 #define BYTES_UNIT_STRING                       "bytes "
 
 #define NGX_UPLOAD_MALFORMED    -11
@@ -66,8 +65,16 @@ typedef ngx_md5_t MD5_CTX;
 #define NGX_UPLOAD_TOOLARGE     -15
 
 #ifndef NGX_HTTP_V2
-#define NGX_HTTP_V2 0
+    #define NGX_HTTP_V2 0
 #endif
+
+// add by chnykn 2022.02.01
+#if (NGX_WIN32)
+    #define strncasecmp _strnicmp
+    #define strcasecmp _stricmp
+#endif 
+
+
 
 /*
  * State of multipart/form-data parser
@@ -302,6 +309,8 @@ static void *ngx_http_upload_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_upload_merge_loc_conf(ngx_conf_t *cf,
     void *parent, void *child);
 static ngx_int_t ngx_http_upload_add_variables(ngx_conf_t *cf);
+static void ngx_http_upload_variable_set(ngx_http_request_t *r,
+    ngx_http_variable_value_t *v, uintptr_t data);
 static ngx_int_t ngx_http_upload_variable(ngx_http_request_t *r,
     ngx_http_variable_value_t *v, uintptr_t data);
 static ngx_int_t ngx_http_upload_md5_variable(ngx_http_request_t *r,
@@ -324,10 +333,6 @@ static ngx_int_t ngx_http_upload_uint_variable(ngx_http_request_t *r,
     ngx_http_variable_value_t *v, uintptr_t data);
 static char *ngx_http_upload_pass(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 
-static ngx_int_t
-ngx_http_upload_process_field_templates(ngx_http_request_t *r,
-    ngx_http_upload_field_template_t *t, ngx_str_t *field_name, ngx_str_t *field_value);
-
 static ngx_int_t ngx_http_upload_start_handler(ngx_http_upload_ctx_t *u);
 static void ngx_http_upload_finish_handler(ngx_http_upload_ctx_t *u);
 static void ngx_http_upload_abort_handler(ngx_http_upload_ctx_t *u);
@@ -347,7 +352,9 @@ static ngx_int_t ngx_http_read_upload_client_request_body(ngx_http_request_t *r)
 
 static char *ngx_http_upload_set_form_field(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
-    static ngx_int_t ngx_http_upload_eval_path(ngx_http_request_t *r);
+static char *ngx_http_upload_add_header(ngx_conf_t *cf, ngx_command_t *cmd,
+    void *conf);
+static ngx_int_t ngx_http_upload_eval_path(ngx_http_request_t *r);
 static ngx_int_t ngx_http_upload_eval_state_path(ngx_http_request_t *r);
 static char *ngx_http_upload_pass_form_field(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
@@ -666,7 +673,7 @@ static ngx_command_t  ngx_http_upload_commands[] = { /* {{{ */
     { ngx_string("upload_add_header"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LMT_CONF|NGX_HTTP_LIF_CONF
                         |NGX_CONF_TAKE2,
-      ngx_http_upload_set_form_field,
+      ngx_http_upload_add_header,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_upload_loc_conf_t, header_templates),
       NULL},
@@ -710,7 +717,7 @@ static ngx_http_variable_t  ngx_http_upload_variables[] = { /* {{{ */
       NGX_HTTP_VAR_CHANGEABLE|NGX_HTTP_VAR_NOCACHEABLE|NGX_HTTP_VAR_NOHASH, 0 },
 
     { ngx_string("upload_content_type"),
-      NULL,
+      ngx_http_upload_variable_set,
       ngx_http_upload_variable,
       (uintptr_t) offsetof(ngx_http_upload_ctx_t, content_type),
       NGX_HTTP_VAR_CHANGEABLE|NGX_HTTP_VAR_NOCACHEABLE|NGX_HTTP_VAR_NOHASH, 0 },
@@ -1052,14 +1059,18 @@ err:
 static ngx_int_t ngx_http_upload_add_headers(ngx_http_request_t *r, ngx_http_upload_loc_conf_t *ulcf) { /* {{{ */
     ngx_str_t                            name;
     ngx_str_t                            value;
-    ngx_http_upload_field_template_t     *t;
+    ngx_http_upload_header_template_t    *t;
     ngx_table_elt_t                      *h;
     ngx_uint_t                           i;
 
-    if (ulcf->header_templates != NULL) {
+    if(ulcf->header_templates != NULL) {
         t = ulcf->header_templates->elts;
-        for (i = 0; i < ulcf->header_templates->nelts; i++) {
-            if (ngx_http_upload_process_field_templates(r, &t[i], &name, &value) != NGX_OK) {
+        for(i = 0; i < ulcf->header_templates->nelts; i++) {
+            if(ngx_http_complex_value(r, t->name, &name) != NGX_OK) {
+                return NGX_ERROR;
+            }
+
+            if(ngx_http_complex_value(r, t->value, &value) != NGX_OK) {
                 return NGX_ERROR;
             }
 
@@ -1075,6 +1086,8 @@ static ngx_int_t ngx_http_upload_add_headers(ngx_http_request_t *r, ngx_http_upl
                 h->value.len = value.len;
                 h->value.data = value.data;
             }
+
+            t++;
         }
     }
 
@@ -1173,6 +1186,10 @@ static ngx_int_t ngx_http_upload_body_handler(ngx_http_request_t *r) { /* {{{ */
     ngx_chain_t                    *cl, out;
     ngx_str_t                   dummy = ngx_string("<ngx_upload_module_dummy>");
     ngx_table_elt_t             *h;
+
+    if(ngx_http_upload_add_headers(r, ulcf) != NGX_OK) {
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    }
 
     if(ctx->prevent_output) {
         r->headers_out.status = NGX_HTTP_CREATED;
@@ -1350,27 +1367,6 @@ static ngx_int_t ngx_http_upload_body_handler(ngx_http_request_t *r) { /* {{{ */
     return rc;
 } /* }}} */
 
-static ngx_int_t
-ngx_http_upload_process_field_templates(
-    ngx_http_request_t *r, ngx_http_upload_field_template_t *t,
-    ngx_str_t *name, ngx_str_t *value)
-{
-    if (t->field_lengths == NULL) {
-        *name = t->value.key;
-    } else if (ngx_http_script_run(r, name, t->field_lengths->elts, 0,
-                                   t->field_values->elts) == NULL) {
-        return NGX_UPLOAD_SCRIPTERROR;
-    }
-
-    if (t->value_lengths == NULL) {
-        *value = t->value.value;
-    } else if (ngx_http_script_run(r, value, t->value_lengths->elts, 0,
-                                   t->value_values->elts) == NULL) {
-            return NGX_UPLOAD_SCRIPTERROR;
-    }
-    return NGX_OK;
-}
-
 static ngx_int_t ngx_http_upload_start_handler(ngx_http_upload_ctx_t *u) { /* {{{ */
     ngx_http_request_t        *r = u->request;
     ngx_http_upload_loc_conf_t  *ulcf = ngx_http_get_module_loc_conf(r, ngx_http_upload_module);
@@ -1506,10 +1502,28 @@ static ngx_int_t ngx_http_upload_start_handler(ngx_http_upload_ctx_t *u) { /* {{
 
             t = ulcf->field_templates->elts;
             for (i = 0; i < ulcf->field_templates->nelts; i++) {
-                rc = ngx_http_upload_process_field_templates(r, &t[i], &field_name, &field_value);
 
-                if(rc != NGX_OK)
-                    goto cleanup_file;
+                if (t[i].field_lengths == NULL) {
+                    field_name = t[i].value.key;
+                }else{
+                    if (ngx_http_script_run(r, &field_name, t[i].field_lengths->elts, 0,
+                        t[i].field_values->elts) == NULL)
+                    {
+                        rc = NGX_UPLOAD_SCRIPTERROR;
+                        goto cleanup_file;
+                    }
+                }
+
+                if (t[i].value_lengths == NULL) {
+                    field_value = t[i].value.value;
+                }else{
+                    if (ngx_http_script_run(r, &field_value, t[i].value_lengths->elts, 0,
+                        t[i].value_values->elts) == NULL)
+                    {
+                        rc = NGX_UPLOAD_SCRIPTERROR;
+                        goto cleanup_file;
+                    }
+                }
 
                 rc = ngx_http_upload_append_field(u, &field_name, &field_value);
 
@@ -1596,11 +1610,6 @@ static ngx_int_t ngx_http_upload_start_handler(ngx_http_upload_ctx_t *u) { /* {{
             u->discard_data = 1;
     }
 
-
-    if(ngx_http_upload_add_headers(r, ulcf) != NGX_OK) {
-        return NGX_HTTP_INTERNAL_SERVER_ERROR;
-    }
-
     return NGX_OK;
 
 cleanup_file:
@@ -1618,7 +1627,11 @@ static void ngx_http_upload_finish_handler(ngx_http_upload_ctx_t *u) { /* {{{ */
 
     if(u->is_file) {
         ucln = u->cln->data;
+#if (NGX_WIN32)  // modified by chnykn 2022.02.01
+        ucln->fd = NULL;
+#else 
         ucln->fd = -1;
+#endif
 
         ngx_close_file(u->output_file.fd);
 
@@ -1695,10 +1708,25 @@ static void ngx_http_upload_finish_handler(ngx_http_upload_ctx_t *u) { /* {{{ */
         if(ulcf->aggregate_field_templates) {
             af = ulcf->aggregate_field_templates->elts;
             for (i = 0; i < ulcf->aggregate_field_templates->nelts; i++) {
-                rc = ngx_http_upload_process_field_templates(r, &af[i], &aggregate_field_name,
-                                                             &aggregate_field_value);
-                if (rc != NGX_OK) {
-                    goto rollback;
+
+                if (af[i].field_lengths == NULL) {
+                    aggregate_field_name = af[i].value.key;
+                }else{
+                    if (ngx_http_script_run(r, &aggregate_field_name, af[i].field_lengths->elts, 0,
+                        af[i].field_values->elts) == NULL)
+                    {
+                        goto rollback;
+                    }
+                }
+
+                if (af[i].value_lengths == NULL) {
+                    aggregate_field_value = af[i].value.value;
+                }else{
+                    if (ngx_http_script_run(r, &aggregate_field_value, af[i].value_lengths->elts, 0,
+                        af[i].value_values->elts) == NULL)
+                    {
+                        goto rollback;
+                    }
                 }
 
                 rc = ngx_http_upload_append_field(u, &aggregate_field_name, &aggregate_field_value);
@@ -1730,7 +1758,11 @@ static void ngx_http_upload_abort_handler(ngx_http_upload_ctx_t *u) { /* {{{ */
          * cleanup record as aborted.
          */
         ucln = u->cln->data;
+#if (NGX_WIN32)  // modified by chnykn 2022.02.01
+        ucln->fd = NULL;
+#else 
         ucln->fd = -1;
+#endif
         ucln->aborted = 1;
 
         ngx_close_file(u->output_file.fd);
@@ -1984,7 +2016,7 @@ ngx_http_upload_buf_merge_range(ngx_http_upload_merger_state_t *ms, ngx_http_upl
                     return NGX_ERROR;
                 }
 
-                if(ms->current_range_n.start > ms->current_range_n.end || ms->current_range_n.start > ms->current_range_n.total
+                if(ms->current_range_n.start >= ms->current_range_n.end || ms->current_range_n.start >= ms->current_range_n.total
                     || ms->current_range_n.end > ms->current_range_n.total)
                 {
                     ngx_log_debug3(NGX_LOG_DEBUG_CORE, ms->log, 0,
@@ -2090,13 +2122,96 @@ ngx_http_upload_buf_merge_range(ngx_http_upload_merger_state_t *ms, ngx_http_upl
     return NGX_OK;
 } /* }}} */
 
+//add by chnykn 2022.02.01
+static long ngx_file_st_size(ngx_file_info_t info) {
+#if (NGX_WIN32) // modified by chnykn 2022.02.01
+    ULARGE_INTEGER ul = { 0 };
+    ul.LowPart = info.nFileSizeLow;
+    ul.HighPart = info.nFileSizeHigh;
+    return ul.QuadPart;
+#else
+    return info.st_size;
+#endif
+}
+
+#if (NGX_WIN32)
+	// add by chnykn 2022.02.01, from https://github.com/spotify/annoy/issues/487
+    inline int ftruncate(HANDLE fd, int64_t l_size)
+    {
+        /*
+        if (fd < 0)
+        {
+            errno = EBADF;
+            fprintf(stderr, "%s\n", "fd arg was negative");
+            return -1;
+        }
+
+        HANDLE h = (HANDLE)_get_osfhandle(fd);
+        */
+
+        if (fd == NULL) {
+            errno = EBADF;
+            fprintf(stderr, "%s\n", "fd arg was NULL");
+            return -1;
+        }
+        HANDLE h = fd;
+
+
+        LARGE_INTEGER li_0;
+        li_0.QuadPart = (int64_t)0;
+        BOOL cur = SetFilePointerEx(h, li_0, NULL, FILE_CURRENT);
+        if (!cur)
+        {
+            fprintf(stderr, "[SetFilePointerEx] Error getting current position in file.\n");
+            return -1;
+        }
+
+        LARGE_INTEGER li_size;
+        li_size.QuadPart = l_size;
+        BOOL cur2 = SetFilePointerEx(h, li_size, NULL, FILE_BEGIN);
+        if (cur2 == 0)
+        {
+            int error = GetLastError();
+            fprintf(stderr, "[SetFilePointerEx] GetLastError is: %d\n", error);
+            switch (error)
+            {
+            case ERROR_INVALID_HANDLE:
+                errno = EBADF;
+                break;
+            default:
+                errno = EIO;
+                break;
+            }
+            return -1;
+        }
+
+        if (!SetEndOfFile(h))
+        {
+            int error = GetLastError();
+            fprintf(stderr, "[SetEndOfFile] GetLastError is: %d\n", error);
+            switch (error)
+            {
+            case ERROR_INVALID_HANDLE:
+                errno = EBADF;
+                break;
+            default:
+                errno = EIO;
+                break;
+            }
+            return -1;
+        }
+
+        return 0;
+    }
+#endif
+
 static ngx_int_t /* {{{ ngx_http_upload_merge_ranges */
 ngx_http_upload_merge_ranges(ngx_http_upload_ctx_t *u, ngx_http_upload_range_t *range_n) {
     ngx_file_t  *state_file = &u->state_file;
     ngx_http_upload_merger_state_t ms;
     off_t        remaining;
     ssize_t      rc;
-    __attribute__((__unused__)) int result;
+    int          result;
     ngx_buf_t    in_buf;
     ngx_buf_t    out_buf;
     ngx_http_upload_loc_conf_t  *ulcf = ngx_http_get_module_loc_conf(u->request, ngx_http_upload_module);
@@ -2111,7 +2226,10 @@ ngx_http_upload_merge_ranges(ngx_http_upload_ctx_t *u, ngx_http_upload_range_t *
         return NGX_ERROR;
     }
 
+	// modified by chnykn 2022.02.01
+#if !(NGX_WIN32) 
     ngx_lock_fd(state_file->fd);
+#endif
 
     ngx_fd_info(state_file->fd, &state_file->info);
 
@@ -2144,9 +2262,9 @@ ngx_http_upload_merge_ranges(ngx_http_upload_ctx_t *u, ngx_http_upload_range_t *
         in_buf.file_pos = state_file->offset;
         in_buf.pos = in_buf.last = in_buf.start;
 
-        if(state_file->offset < state_file->info.st_size) {
-            remaining = state_file->info.st_size - state_file->offset > in_buf.end - in_buf.start
-                ? in_buf.end - in_buf.start : state_file->info.st_size - state_file->offset;
+        if(state_file->offset < ngx_file_st_size(state_file->info)) {
+            remaining = ngx_file_st_size(state_file->info) - state_file->offset > in_buf.end - in_buf.start
+                ? in_buf.end - in_buf.start : ngx_file_st_size(state_file->info) - state_file->offset;
 
             rc = ngx_read_file(state_file, in_buf.pos, remaining, state_file->offset);
 
@@ -2157,7 +2275,7 @@ ngx_http_upload_merge_ranges(ngx_http_upload_ctx_t *u, ngx_http_upload_range_t *
             in_buf.last = in_buf.pos + rc;
         }
 
-        in_buf.last_buf = state_file->offset == state_file->info.st_size ? 1 : 0;
+        in_buf.last_buf = state_file->offset == ngx_file_st_size(state_file->info) ? 1 : 0;
 
         if(out_buf.pos != out_buf.last) {
             rc = ngx_write_file(state_file, out_buf.pos, out_buf.last - out_buf.pos, out_buf.file_pos);
@@ -2177,7 +2295,7 @@ ngx_http_upload_merge_ranges(ngx_http_upload_ctx_t *u, ngx_http_upload_range_t *
             rc = NGX_ERROR;
             goto failed;
         }
-    } while(state_file->offset < state_file->info.st_size);
+    } while(state_file->offset < ngx_file_st_size(state_file->info));
 
     if(out_buf.pos != out_buf.last) {
         rc = ngx_write_file(state_file, out_buf.pos, out_buf.last - out_buf.pos, out_buf.file_pos);
@@ -2189,14 +2307,17 @@ ngx_http_upload_merge_ranges(ngx_http_upload_ctx_t *u, ngx_http_upload_range_t *
         out_buf.file_pos += out_buf.last - out_buf.pos;
     }
 
-    if(out_buf.file_pos < state_file->info.st_size) {
+    if(out_buf.file_pos < ngx_file_st_size(state_file->info)) {
         result = ftruncate(state_file->fd, out_buf.file_pos);
     }
 
     rc = ms.complete_ranges ? NGX_OK : NGX_AGAIN;
 
 failed:
+	// modified by chnykn 2022.02.01
+#if !(NGX_WIN32) 
     ngx_unlock_fd(state_file->fd);
+#endif
 
     ngx_close_file(state_file->fd);
 
@@ -2381,6 +2502,21 @@ ngx_http_upload_add_variables(ngx_conf_t *cf)
     return NGX_OK;
 } /* }}} */
 
+static void /* {{{ ngx_http_upload_variable_set */
+ngx_http_upload_variable_set(ngx_http_request_t *r,
+    ngx_http_variable_value_t *v, uintptr_t data)
+{
+    ngx_str_t  *s;
+    ngx_http_upload_ctx_t  *u;
+
+    u = ngx_http_get_module_ctx(r, ngx_http_upload_module);
+
+    s = (ngx_str_t *) ((char *) u + data);
+
+    s->len = v->len;
+    s->data = v->data;
+} /* }}} */
+
 static ngx_int_t /* {{{ ngx_http_upload_variable */
 ngx_http_upload_variable(ngx_http_request_t *r,
     ngx_http_variable_value_t *v, uintptr_t data)
@@ -2402,47 +2538,14 @@ ngx_http_upload_variable(ngx_http_request_t *r,
     return NGX_OK;
 } /* }}} */
 
-static ngx_int_t
-ngx_http_upload_hash_variable(ngx_http_request_t *r,
-    ngx_http_variable_value_t *v, uintptr_t data, u_char *digest,
-    ngx_uint_t digest_len)
-{
-    ngx_uint_t             i;
-    u_char                 *c;
-    u_char                 *p;
-    u_char                 *hex_table;
-
-    v->valid = 1;
-    v->no_cacheable = 0;
-    v->not_found = 0;
-
-    hex_table = (u_char*)data;
-
-    p = ngx_palloc(r->pool, digest_len * 2);
-    if (p == NULL) {
-        return NGX_ERROR;
-    }
-
-    c = p + digest_len * 2;
-    i = digest_len;
-
-    do{
-        i--;
-        *--c = hex_table[digest[i] & 0xf];
-        *--c = hex_table[digest[i] >> 4];
-    }while(i != 0);
-
-    v->data = c;
-    v->len = digest_len * 2;
-
-    return NGX_OK;
-} /* }}} */
-
 static ngx_int_t /* {{{ ngx_http_upload_md5_variable */
 ngx_http_upload_md5_variable(ngx_http_request_t *r,
     ngx_http_variable_value_t *v,  uintptr_t data)
 {
+    ngx_uint_t             i;
     ngx_http_upload_ctx_t  *u;
+    u_char                 *c;
+    u_char                 *hex_table;
 
     u = ngx_http_get_module_ctx(r, ngx_http_upload_module);
 
@@ -2450,14 +2553,36 @@ ngx_http_upload_md5_variable(ngx_http_request_t *r,
         v->not_found = 1;
         return NGX_OK;
     }
-    return ngx_http_upload_hash_variable(r, v, data, u->md5_ctx->md5_digest, MD5_DIGEST_LENGTH);
+
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+
+    hex_table = (u_char*)data;
+    c = u->md5_ctx->md5_digest + MD5_DIGEST_LENGTH * 2;
+
+    i = MD5_DIGEST_LENGTH;
+
+    do{
+        i--;
+        *--c = hex_table[u->md5_ctx->md5_digest[i] & 0xf];
+        *--c = hex_table[u->md5_ctx->md5_digest[i] >> 4];
+    }while(i != 0);
+
+    v->data = u->md5_ctx->md5_digest;
+    v->len = MD5_DIGEST_LENGTH * 2;
+
+    return NGX_OK;
 } /* }}} */
 
 static ngx_int_t /* {{{ ngx_http_upload_sha1_variable */
 ngx_http_upload_sha1_variable(ngx_http_request_t *r,
     ngx_http_variable_value_t *v,  uintptr_t data)
 {
+    ngx_uint_t             i;
     ngx_http_upload_ctx_t  *u;
+    u_char                 *c;
+    u_char                 *hex_table;
 
     u = ngx_http_get_module_ctx(r, ngx_http_upload_module);
 
@@ -2466,14 +2591,35 @@ ngx_http_upload_sha1_variable(ngx_http_request_t *r,
         return NGX_OK;
     }
 
-    return ngx_http_upload_hash_variable(r, v, data, u->sha1_ctx->sha1_digest, SHA_DIGEST_LENGTH);
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+
+    hex_table = (u_char*)data;
+    c = u->sha1_ctx->sha1_digest + SHA_DIGEST_LENGTH * 2;
+
+    i = SHA_DIGEST_LENGTH;
+
+    do{
+        i--;
+        *--c = hex_table[u->sha1_ctx->sha1_digest[i] & 0xf];
+        *--c = hex_table[u->sha1_ctx->sha1_digest[i] >> 4];
+    }while(i != 0);
+
+    v->data = u->sha1_ctx->sha1_digest;
+    v->len = SHA_DIGEST_LENGTH * 2;
+
+    return NGX_OK;
 } /* }}} */
 
 static ngx_int_t /* {{{ ngx_http_upload_sha256_variable */
 ngx_http_upload_sha256_variable(ngx_http_request_t *r,
     ngx_http_variable_value_t *v,  uintptr_t data)
 {
+    ngx_uint_t             i;
     ngx_http_upload_ctx_t  *u;
+    u_char                 *c;
+    u_char                 *hex_table;
 
     u = ngx_http_get_module_ctx(r, ngx_http_upload_module);
 
@@ -2482,14 +2628,35 @@ ngx_http_upload_sha256_variable(ngx_http_request_t *r,
         return NGX_OK;
     }
 
-    return ngx_http_upload_hash_variable(r, v, data, u->sha256_ctx->sha256_digest, SHA256_DIGEST_LENGTH);
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+
+    hex_table = (u_char*)data;
+    c = u->sha256_ctx->sha256_digest + SHA256_DIGEST_LENGTH * 2;
+
+    i = SHA256_DIGEST_LENGTH;
+
+    do{
+        i--;
+        *--c = hex_table[u->sha256_ctx->sha256_digest[i] & 0xf];
+        *--c = hex_table[u->sha256_ctx->sha256_digest[i] >> 4];
+    }while(i != 0);
+
+    v->data = u->sha256_ctx->sha256_digest;
+    v->len = SHA256_DIGEST_LENGTH * 2;
+
+    return NGX_OK;
 } /* }}} */
 
 static ngx_int_t /* {{{ ngx_http_upload_sha512_variable */
 ngx_http_upload_sha512_variable(ngx_http_request_t *r,
     ngx_http_variable_value_t *v,  uintptr_t data)
 {
+    ngx_uint_t             i;
     ngx_http_upload_ctx_t  *u;
+    u_char                 *c;
+    u_char                 *hex_table;
 
     u = ngx_http_get_module_ctx(r, ngx_http_upload_module);
 
@@ -2498,7 +2665,25 @@ ngx_http_upload_sha512_variable(ngx_http_request_t *r,
         return NGX_OK;
     }
 
-    return ngx_http_upload_hash_variable(r, v, data, u->sha512_ctx->sha512_digest, SHA512_DIGEST_LENGTH);
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+
+    hex_table = (u_char*)data;
+    c = u->sha512_ctx->sha512_digest + SHA512_DIGEST_LENGTH * 2;
+
+    i = SHA512_DIGEST_LENGTH;
+
+    do{
+        i--;
+        *--c = hex_table[u->sha512_ctx->sha512_digest[i] & 0xf];
+        *--c = hex_table[u->sha512_ctx->sha512_digest[i] >> 4];
+    }while(i != 0);
+
+    v->data = u->sha512_ctx->sha512_digest;
+    v->len = SHA512_DIGEST_LENGTH * 2;
+
+    return NGX_OK;
 } /* }}} */
 
 static ngx_int_t /* {{{ ngx_http_upload_crc32_variable */
@@ -2837,6 +3022,73 @@ ngx_http_upload_pass_form_field(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     f->text.len = value[1].len;
     f->text.data = value[1].data;
 #endif
+
+    return NGX_CONF_OK;
+} /* }}} */
+
+static char * /* {{{ ngx_http_upload_add_header */
+ngx_http_upload_add_header(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_str_t                  *value;
+    ngx_http_upload_header_template_t *h;
+    ngx_array_t                 **field;
+    ngx_http_compile_complex_value_t   ccv;
+
+    field = (ngx_array_t**) (((u_char*)conf) + cmd->offset);
+
+    value = cf->args->elts;
+
+    /*
+     * Add new entry to header template list
+     */
+    if (*field == NULL) {
+        *field = ngx_array_create(cf->pool, 1,
+                                  sizeof(ngx_http_upload_header_template_t));
+        if (*field == NULL) {
+            return NGX_CONF_ERROR;
+        }
+    }
+
+    h = ngx_array_push(*field);
+    if (h == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    /*
+     * Compile header name
+     */
+    h->name = ngx_palloc(cf->pool, sizeof(ngx_http_complex_value_t));
+    if(h->name == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
+    ccv.cf = cf;
+    ccv.value = &value[1];
+    ccv.complex_value = h->name;
+
+    if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
+        return NGX_CONF_ERROR;
+    }
+
+    /*
+     * Compile header value
+     */
+    h->value = ngx_palloc(cf->pool, sizeof(ngx_http_complex_value_t));
+    if(h->value == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
+    ccv.cf = cf;
+    ccv.value = &value[2];
+    ccv.complex_value = h->value;
+
+    if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
+        return NGX_CONF_ERROR;
+    }
 
     return NGX_CONF_OK;
 } /* }}} */
@@ -3451,8 +3703,6 @@ ngx_http_do_read_upload_client_request_body(ngx_http_request_t *r)
         ngx_del_timer(c->read);
     }
 
-    r->read_event_handler = ngx_http_block_reading;
-
     rc = ngx_http_process_request_body(r, u->to_write);
 
     switch(rc) {
@@ -3510,8 +3760,8 @@ static ngx_int_t upload_parse_content_disposition(ngx_http_upload_ctx_t *upload_
 
     p = (char*)content_disposition->data;
 
-    if(strncasecmp(FORM_DATA_STRING, p, sizeof(FORM_DATA_STRING)-1) && 
-            strncasecmp(ATTACHMENT_STRING, p, sizeof(ATTACHMENT_STRING)-1)) {
+    if (strncasecmp(FORM_DATA_STRING, p, sizeof(FORM_DATA_STRING) - 1) &&
+        strncasecmp(ATTACHMENT_STRING, p, sizeof(ATTACHMENT_STRING) - 1)) {
         ngx_log_debug0(NGX_LOG_DEBUG_CORE, upload_ctx->log, 0,
                        "Content-Disposition is not form-data or attachment");
         return NGX_UPLOAD_MALFORMED;
@@ -3521,13 +3771,15 @@ static ngx_int_t upload_parse_content_disposition(ngx_http_upload_ctx_t *upload_
 
     if(filename_start != 0) {
         
-        filename_start += sizeof(FILENAME_STRING) - 1;
+        filename_start += sizeof(FILENAME_STRING)-1;
 
-        if (*filename_start == '\"') {
-            filename_start++;
+        filename_end = filename_start + strcspn(filename_start, "\"");
+
+        if(*filename_end != '\"') {
+            ngx_log_debug0(NGX_LOG_DEBUG_CORE, upload_ctx->log, 0,
+                           "malformed filename in part header");
+            return NGX_UPLOAD_MALFORMED;
         }
-
-        filename_end = filename_start + strcspn(filename_start, "\";");
 
         /*
          * IE sends full path, strip path from filename 
@@ -3555,14 +3807,16 @@ static ngx_int_t upload_parse_content_disposition(ngx_http_upload_ctx_t *upload_
 //    }while((fieldname_start != 0) && (fieldname_start + sizeof(FIELDNAME_STRING) - 1 == filename_start));
 
     if(fieldname_start != 0) {
-        fieldname_start += sizeof(FIELDNAME_STRING) - 1;
-
-        if (*fieldname_start == '\"') {
-            fieldname_start++;
-        }
+        fieldname_start += sizeof(FIELDNAME_STRING)-1;
 
         if(fieldname_start != filename_start) {
-            fieldname_end = fieldname_start + strcspn(fieldname_start, "\";");
+            fieldname_end = fieldname_start + strcspn(fieldname_start, "\"");
+
+            if(*fieldname_end != '\"') {
+                ngx_log_error(NGX_LOG_ERR, upload_ctx->log, 0,
+                               "malformed fieldname in part header");
+                return NGX_UPLOAD_MALFORMED;
+            }
 
             upload_ctx->field_name.len = fieldname_end - fieldname_start;
             upload_ctx->field_name.data = ngx_pcalloc(upload_ctx->request->pool, upload_ctx->field_name.len + 1);
@@ -3936,12 +4190,6 @@ static ngx_int_t upload_parse_request_headers(ngx_http_upload_ctx_t *upload_ctx,
 
         boundary_start_ptr += sizeof(BOUNDARY_STRING) - 1;
         boundary_end_ptr = boundary_start_ptr + strcspn((char*)boundary_start_ptr, " ;\n\r");
-
-        // Handle quoted boundaries
-        if ((boundary_end_ptr - boundary_start_ptr) >= 2 && boundary_start_ptr[0] == '"' && *(boundary_end_ptr - 1) == '"') {
-          boundary_start_ptr++;
-          boundary_end_ptr--;
-        }
 
         if(boundary_end_ptr == boundary_start_ptr) {
             ngx_log_debug0(NGX_LOG_DEBUG_CORE, upload_ctx->log, 0,
