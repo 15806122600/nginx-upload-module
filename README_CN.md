@@ -5,7 +5,7 @@
 ；使用帮助，请访问这个地址。
 
 
-为了能在最新的Nginx版本在Windows平台上编译通过，对代码进行了修改。
+为了能在Windows上编译通过最新的Nginx版本，对代码进行了修改。
 
 ----------------------
 
@@ -24,7 +24,7 @@ auto/configure --with-cc=cl --builddir=objs --prefix= --conf-path=conf/nginx.con
 
 *请注意*：--with-pcre、--with-zlib、--with-openssl、--add-module 设置为自己实际情况的路径;
 
-5、针对上述参数，执行完毕后。请把objs目录下的Makefile中的CFLAGS去掉"-WX"编译选项，否则会报错“nginx error:c2220:警告被视为错误....”；
+5、针对上述参数，执行完毕后。请把objs目录下的Makefile中的CFLAGS去掉"-WX"编译选项；否则在下一步骤的namke中，会报错“nginx error:c2220:警告被视为错误....”；
 
 6、以管理员身份打开Visual Studio的“x64 Native Tools Command Prompt”，设置当前路径为nginx源码路径，执行命令 nmake –f objs/Makefile 
 
