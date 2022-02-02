@@ -15,9 +15,9 @@ Windows平台编译，请首先参考官方帮助：http://nginx.org/en/docs/how
 
 1、nginx源码请在https://github.com/nginx/nginx 下载，**不要**在Nginx官方网站下载，因为其中auto目录内缺少configure文件，无法编译；
 
-2、perl的版本建议不要低于5.30，并且在path路径建议放在前面，确保能找到正确的perl.exe；因为git、msys2等内置perl.exe，但无法用ngnix编译；
+2、perl的版本建议不要低于5.30，并且在path路径建议放在前面，确保能找到正确的perl.exe；因为git、msys2等内置的perl.exe有可能也在path路径中，但无法用于ngnix编译；
 
-3、确保安装了nasm (https://www.nasm.us)，并且在path路径当中；
+3、确保安装了nasm (https://www.nasm.us), 并且在path路径当中；
 
 4、在msys2的mingw64的命令行中，设置当前路径为nginx源码路径，执行auto/configure。供参考编译参数如下
 auto/configure --with-cc=cl --builddir=objs --prefix= --conf-path=conf/nginx.conf --pid-path=logs/nginx.pid --http-log-path=logs/access.log --error-log-path=logs/error.log --sbin-path=nginx.exe --http-client-body-temp-path=temp/client_body --http-proxy-temp-path=temp/proxy --http-fastcgi-temp-path=temp/fastcgi --http-scgi-temp-path=temp/scgi --http-uwsgi-temp-path=temp/uwsgi --with-cc-opt=-DFD_SETSIZE=1024 --with-pcre=../lib/pcre --with-zlib=../lib/zlib --with-openssl=../lib/openssl --with-openssl-opt=no-asm --with-select_module --with-http_ssl_module --with-stream --with-stream_ssl_preread_module --add-module=./upload-module 
@@ -32,7 +32,7 @@ auto/configure --with-cc=cl --builddir=objs --prefix= --conf-path=conf/nginx.con
 
 -----
 
-下载已编译的 ngnix1.20.2 for win x64:
+下载已编译的 ngnix1.20.2 for win x64 二进制文件:
 https://github.com/chnykn/nginx-upload-module/releases
 
 
