@@ -9,5 +9,5 @@ In order that latest version nginx can be compiled for windows platform, I chang
 
 -----
 
-download compiled ngnix1.20.2 for win x64: 
+download compiled ngnix1.20.2 for win x64 binary file: 
 https://github.com/chnykn/nginx-upload-module/releases
