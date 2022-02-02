@@ -804,8 +804,8 @@ static ngx_int_t /* {{{ ngx_http_upload_handler */
 ngx_http_upload_handler(ngx_http_request_t *r)
 {
     ngx_http_upload_loc_conf_t  *ulcf;
-    ngx_http_upload_ctx_t     *u;
-    ngx_int_t                 rc;
+    ngx_http_upload_ctx_t       *u;
+    ngx_int_t                   rc;
 
     if(r->method & NGX_HTTP_OPTIONS)
         return ngx_http_upload_options_handler(r);
@@ -1182,8 +1182,8 @@ static ngx_int_t ngx_http_upload_body_handler(ngx_http_request_t *r) { /* {{{ */
     ngx_uint_t                  flags;
     ngx_int_t                   rc;
     ngx_str_t                   uri;
-    ngx_buf_t                      *b;
-    ngx_chain_t                    *cl, out;
+    ngx_buf_t                   *b;
+    ngx_chain_t                 *cl, out;
     ngx_str_t                   dummy = ngx_string("<ngx_upload_module_dummy>");
     ngx_table_elt_t             *h;
 
@@ -1378,7 +1378,7 @@ static ngx_int_t ngx_http_upload_start_handler(ngx_http_upload_ctx_t *u) { /* {{
     ngx_uint_t  i;
     ngx_int_t   rc;
     ngx_err_t   err;
-    ngx_http_upload_field_template_t    *t;
+    ngx_http_upload_field_template_t  *t;
     ngx_http_upload_field_filter_t    *f;
     ngx_str_t   field_name, field_value;
     ngx_uint_t  pass_field;
@@ -1618,8 +1618,8 @@ cleanup_file:
 
 static void ngx_http_upload_finish_handler(ngx_http_upload_ctx_t *u) { /* {{{ */
     ngx_http_upload_field_template_t    *af;
-    ngx_str_t   aggregate_field_name, aggregate_field_value;
-    ngx_http_request_t        *r = u->request;
+    ngx_str_t                   aggregate_field_name, aggregate_field_value;
+    ngx_http_request_t          *r = u->request;
     ngx_http_upload_loc_conf_t  *ulcf = ngx_http_get_module_loc_conf(r, ngx_http_upload_module);
     ngx_uint_t  i;
     ngx_int_t   rc;
@@ -2135,74 +2135,73 @@ static long ngx_file_st_size(ngx_file_info_t info) {
 }
 
 #if (NGX_WIN32)
-	// add by chnykn 2022.02.01, from https://github.com/spotify/annoy/issues/487
-    inline int ftruncate(HANDLE fd, int64_t l_size)
+// add by chnykn 2022.02.01, from https://github.com/spotify/annoy/issues/487
+inline int ftruncate(HANDLE fd, int64_t l_size)
+{
+    /*
+    if (fd < 0)
     {
-        /*
-        if (fd < 0)
-        {
-            errno = EBADF;
-            fprintf(stderr, "%s\n", "fd arg was negative");
-            return -1;
-        }
-
-        HANDLE h = (HANDLE)_get_osfhandle(fd);
-        */
-
-        if (fd == NULL) {
-            errno = EBADF;
-            fprintf(stderr, "%s\n", "fd arg was NULL");
-            return -1;
-        }
-        HANDLE h = fd;
-
-
-        LARGE_INTEGER li_0;
-        li_0.QuadPart = (int64_t)0;
-        BOOL cur = SetFilePointerEx(h, li_0, NULL, FILE_CURRENT);
-        if (!cur)
-        {
-            fprintf(stderr, "[SetFilePointerEx] Error getting current position in file.\n");
-            return -1;
-        }
-
-        LARGE_INTEGER li_size;
-        li_size.QuadPart = l_size;
-        BOOL cur2 = SetFilePointerEx(h, li_size, NULL, FILE_BEGIN);
-        if (cur2 == 0)
-        {
-            int error = GetLastError();
-            fprintf(stderr, "[SetFilePointerEx] GetLastError is: %d\n", error);
-            switch (error)
-            {
-            case ERROR_INVALID_HANDLE:
-                errno = EBADF;
-                break;
-            default:
-                errno = EIO;
-                break;
-            }
-            return -1;
-        }
-
-        if (!SetEndOfFile(h))
-        {
-            int error = GetLastError();
-            fprintf(stderr, "[SetEndOfFile] GetLastError is: %d\n", error);
-            switch (error)
-            {
-            case ERROR_INVALID_HANDLE:
-                errno = EBADF;
-                break;
-            default:
-                errno = EIO;
-                break;
-            }
-            return -1;
-        }
-
-        return 0;
+        errno = EBADF;
+        fprintf(stderr, "%s\n", "fd arg was negative");
+        return -1;
     }
+
+    HANDLE h = (HANDLE)_get_osfhandle(fd);
+    */
+
+    if (fd == NULL) {
+        errno = EBADF;
+        fprintf(stderr, "%s\n", "fd arg was NULL");
+        return -1;
+    }
+    HANDLE h = fd;
+
+    LARGE_INTEGER li_0;
+    li_0.QuadPart = (int64_t)0;
+    BOOL cur = SetFilePointerEx(h, li_0, NULL, FILE_CURRENT);
+    if (!cur)
+    {
+        fprintf(stderr, "[SetFilePointerEx] Error getting current position in file.\n");
+        return -1;
+    }
+
+    LARGE_INTEGER li_size;
+    li_size.QuadPart = l_size;
+    BOOL cur2 = SetFilePointerEx(h, li_size, NULL, FILE_BEGIN);
+    if (cur2 == 0)
+    {
+        int error = GetLastError();
+        fprintf(stderr, "[SetFilePointerEx] GetLastError is: %d\n", error);
+        switch (error)
+        {
+        case ERROR_INVALID_HANDLE:
+            errno = EBADF;
+            break;
+        default:
+            errno = EIO;
+            break;
+        }
+        return -1;
+    }
+
+    if (!SetEndOfFile(h))
+    {
+        int error = GetLastError();
+        fprintf(stderr, "[SetEndOfFile] GetLastError is: %d\n", error);
+        switch (error)
+        {
+        case ERROR_INVALID_HANDLE:
+            errno = EBADF;
+            break;
+        default:
+            errno = EIO;
+            break;
+        }
+        return -1;
+    }
+
+    return 0;
+}
 #endif
 
 static ngx_int_t /* {{{ ngx_http_upload_merge_ranges */
@@ -2211,7 +2210,11 @@ ngx_http_upload_merge_ranges(ngx_http_upload_ctx_t *u, ngx_http_upload_range_t *
     ngx_http_upload_merger_state_t ms;
     off_t        remaining;
     ssize_t      rc;
-    int          result;
+#if (NGX_WIN32)
+	int result;
+#else
+	__attribute__((__unused__)) int result;
+#endif
     ngx_buf_t    in_buf;
     ngx_buf_t    out_buf;
     ngx_http_upload_loc_conf_t  *ulcf = ngx_http_get_module_loc_conf(u->request, ngx_http_upload_module);
@@ -2768,8 +2771,8 @@ static ngx_int_t /* {{{ ngx_http_upload_content_range_variable */
 ngx_http_upload_content_range_variable(ngx_http_request_t *r,
     ngx_http_variable_value_t *v,  uintptr_t data)
 {
-    ngx_http_upload_ctx_t  *u;
-    u_char                 *p;
+    ngx_http_upload_ctx_t   *u;
+    u_char                  *p;
     ngx_http_upload_range_t *value;
 
     u = ngx_http_get_module_ctx(r, ngx_http_upload_module);
@@ -2963,7 +2966,7 @@ ngx_http_upload_pass_form_field(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     u_char                      errstr[NGX_MAX_CONF_ERRSTR];
 #else
     ngx_int_t                   n;
-    ngx_str_t                  err;
+    ngx_str_t                   err;
 #endif
 #endif
     ngx_http_upload_field_filter_t *f;
@@ -3354,7 +3357,7 @@ ngx_http_upload_merge_path_value(ngx_conf_t *cf, ngx_http_upload_path_t **path, 
 
 ngx_int_t /* {{{ ngx_http_read_upload_client_request_body */
 ngx_http_read_upload_client_request_body(ngx_http_request_t *r) {
-    ssize_t                    size, preread;
+    ssize_t                   size, preread;
     ngx_buf_t                 *b;
     ngx_chain_t               *cl, **next;
     ngx_http_request_body_t   *rb;
@@ -3577,13 +3580,13 @@ ngx_http_read_upload_client_request_body_handler(ngx_http_request_t *r)
 static ngx_int_t /* {{{ ngx_http_do_read_upload_client_request_body */
 ngx_http_do_read_upload_client_request_body(ngx_http_request_t *r)
 {
-    ssize_t                     size, n, limit;
+    ssize_t                   size, n, limit;
     ngx_connection_t          *c;
     ngx_http_request_body_t   *rb;
     ngx_http_upload_ctx_t     *u = ngx_http_get_module_ctx(r, ngx_http_upload_module);
-    ngx_int_t                  rc;
+    ngx_int_t                 rc;
     ngx_http_core_loc_conf_t  *clcf;
-    ngx_msec_t                 delay;
+    ngx_msec_t                delay;
 
     c = r->connection;
     rb = r->request_body;
