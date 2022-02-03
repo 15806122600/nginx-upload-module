@@ -1,4 +1,4 @@
-# nginx-upload-module
+# nginx-upload-module for windows
 
 [中文说明](https://github.com/chnykn/nginx-upload-module/blob/master/README_CN.md)
 
