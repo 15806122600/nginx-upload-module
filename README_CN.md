@@ -1,4 +1,4 @@
-# nginx-upload-module
+# nginx-upload-module for windows
 
 
 这个模块基于Nginx upload module (v2.3.0)修改，地址：https://github.com/fdintino/nginx-upload-module
