@@ -1437,6 +1437,7 @@ static ngx_int_t ngx_http_upload_start_handler(ngx_http_upload_ctx_t *u) { /* {{
                                "hashed path of state file: %s", state_file->name.data);
             }
 
+            ngx_delete_file(file->name.data); //add by chnykn 2022.02.04
             file->fd = ngx_open_file(file->name.data, NGX_FILE_WRONLY, NGX_FILE_CREATE_OR_OPEN, ulcf->store_access);
 
             if (file->fd == NGX_INVALID_FILE) {
@@ -1461,6 +1462,7 @@ static ngx_int_t ngx_http_upload_start_handler(ngx_http_upload_ctx_t *u) { /* {{
                 ngx_log_debug1(NGX_LOG_DEBUG_CORE, file->log, 0,
                                "hashed path: %s", file->name.data);
 
+                ngx_delete_file(file->name.data); //add by chnykn 2022.02.04
                 file->fd = ngx_open_tempfile(file->name.data, 1, ulcf->store_access);
 
                 if (file->fd != NGX_INVALID_FILE) {
@@ -2220,7 +2222,6 @@ ngx_http_upload_merge_ranges(ngx_http_upload_ctx_t *u, ngx_http_upload_range_t *
     ngx_http_upload_loc_conf_t  *ulcf = ngx_http_get_module_loc_conf(u->request, ngx_http_upload_module);
     ngx_http_upload_range_t  range_to_merge_n;
     
-
     state_file->fd = ngx_open_file(state_file->name.data, NGX_FILE_RDWR, NGX_FILE_CREATE_OR_OPEN, ulcf->store_access);
 
     if (state_file->fd == NGX_INVALID_FILE) {
